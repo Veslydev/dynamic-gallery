@@ -1,8 +1,8 @@
 ## Screenshots
-<a href="url"><img src="https://github.com/skep1337/dynamic-gallery/assets/45910586/3c5a9c54-5412-4765-b91a-e9a376abe822" align="left" height="256" ></a>
+<a href="url"><img src="https://github.com/skepy1337/dynamic-gallery/assets/45910586/3c5a9c54-5412-4765-b91a-e9a376abe822" align="left" height="256" ></a>
 
 ### Mobile view
-<a href="url"><img src="https://github.com/skep1337/dynamic-gallery/assets/45910586/81bec605-9b2e-481f-aa2c-d5528073a156" align="left" height="256" ></a>
+<a href="url"><img src="https://github.com/skepy1337/dynamic-gallery/assets/45910586/81bec605-9b2e-481f-aa2c-d5528073a156" align="left" height="256" ></a>
 
 ## Dependencies
 
@@ -61,7 +61,7 @@ You may need elevated permissions for some of these.
 
 Execute the commands
 ```
-git clone https://github.com/skep1337/dynamic-gallery.git /var/www/html/images
+git clone https://github.com/skepy1337/dynamic-gallery.git /var/www/html/images
 cd /var/www/html/images
 chmod 777 *.sh
 mkdir -p content/thumbnails
