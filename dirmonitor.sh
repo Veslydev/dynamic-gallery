@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 input_directory="/home/container/www/content"
 output_directory="/home/container/www/content/thumbnails"
