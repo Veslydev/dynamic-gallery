@@ -56,8 +56,22 @@ function createImageModal() {
     const copyBtn = modal.querySelector('.copy-url-btn');
     copyBtn.addEventListener('click', () => {
         const img = modal.querySelector('img');
-        const originalUrl = img.src.replace('thumbnails/', '');
+        // Get the original URL by removing 'thumbnails/' from the path
+        const originalUrl = img.src.replace('/content/thumbnails/', '/content/');
         navigator.clipboard.writeText(originalUrl).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy URL';
+            }, 2000);
+        }).catch(err => {
+            console.error('Failed to copy URL:', err);
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = originalUrl;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
             copyBtn.textContent = 'Copied!';
             setTimeout(() => {
                 copyBtn.textContent = 'Copy URL';
