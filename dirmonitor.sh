@@ -1,10 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 input_directory="/home/container/www/content"
 output_directory="/home/container/www/content/thumbnails"
 
-inotifywait -m -e moved_to -e close_write -e create --format "%w%f" "$input_directory" | while read -r newfile
-do
+inotifywait -m -e moved_to -e close_write -e create --format "%w%f" "$input_directory" | while read -r newfile; do
     if [ -f "$newfile" ]; then
         filename=$(basename "$newfile")
         extension="${filename##*.}"

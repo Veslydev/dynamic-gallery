@@ -1,10 +1,9 @@
-#!/usr/bin/env bash
+#!/bin/bash
 
 input_directory="/home/container/www/content"
 output_directory="/home/container/www/content/thumbnails"
 
-for file in "$input_directory"/*
-do
+for file in "$input_directory"/*; do
     if [ ! -f "$file" ]; then
         continue
     fi
