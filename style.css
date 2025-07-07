@@ -17,6 +17,7 @@ body {
 .media-item {
     position: relative;
     cursor: pointer;
+    display: block;
 }
 
 .gallery img {
@@ -47,6 +48,7 @@ body {
     font-size: 24px;
     pointer-events: none;
     transition: all 0.3s ease;
+    z-index: 10;
 }
 
 .video-item:hover .play-icon {
