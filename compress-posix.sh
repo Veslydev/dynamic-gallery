@@ -1,20 +1,16 @@
-#!/bin/bash
+#!/bin/sh
 
-# This script is designed for bash but includes POSIX fallbacks
-# If bash features fail, it will fall back to POSIX-compatible alternatives
+# POSIX-compatible version of compress.sh
+# This script should work in any POSIX shell environment
 
 input_directory="/home/container/www/content"
 output_directory="/home/container/www/content/thumbnails"
 
-echo "DEBUG: Starting compress.sh script"
+echo "DEBUG: Starting compress-posix.sh script"
 echo "DEBUG: Input directory: $input_directory"
 echo "DEBUG: Output directory: $output_directory"
 echo "DEBUG: Shell: $0"
-if [ -n "$BASH_VERSION" ]; then
-    echo "DEBUG: Bash version: $BASH_VERSION"
-else
-    echo "DEBUG: Not running in bash, using POSIX shell"
-fi
+echo "DEBUG: Shell version: $(sh --version 2>/dev/null || echo 'Unknown shell version')"
 echo "=================================="
 
 # Check if required commands exist
