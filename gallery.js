@@ -7,6 +7,13 @@ function isVideoFile(filename) {
     return videoExtensions.includes(extension);
 }
 
+// Function to check if a file is an image
+function isImageFile(filename) {
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+    const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+    return imageExtensions.includes(extension);
+}
+
 // Function to get thumbnail filename for videos
 function getThumbnailFilename(filename) {
     if (isVideoFile(filename)) {
@@ -14,6 +21,58 @@ function getThumbnailFilename(filename) {
         return nameWithoutExt + '.jpg';
     }
     return filename;
+}
+
+// Function to create image modal
+function createImageModal() {
+    const modal = document.createElement('div');
+    modal.className = 'image-modal';
+    modal.innerHTML = `
+        <div class="image-modal-content">
+            <span class="image-modal-close">&times;</span>
+            <img src="" alt="Full size image">
+            <div class="image-info">
+                <span class="image-filename"></span>
+                <button class="copy-url-btn">Copy URL</button>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+    
+    // Close modal functionality
+    const closeBtn = modal.querySelector('.image-modal-close');
+    closeBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+    });
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.style.display = 'none';
+        }
+    });
+
+    // Copy URL functionality
+    const copyBtn = modal.querySelector('.copy-url-btn');
+    copyBtn.addEventListener('click', () => {
+        const img = modal.querySelector('img');
+        const originalUrl = img.src.replace('thumbnails/', '');
+        navigator.clipboard.writeText(originalUrl).then(() => {
+            copyBtn.textContent = 'Copied!';
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy URL';
+            }, 2000);
+        });
+    });
+
+    // Keyboard support
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
+            modal.style.display = 'none';
+        }
+    });
+    
+    return modal;
 }
 
 // Function to create video modal
@@ -41,6 +100,14 @@ function createVideoModal() {
     
     modal.addEventListener('click', (e) => {
         if (e.target === modal) {
+            modal.style.display = 'none';
+            modal.querySelector('video').pause();
+        }
+    });
+
+    // Keyboard support
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && modal.style.display === 'flex') {
             modal.style.display = 'none';
             modal.querySelector('video').pause();
         }
@@ -77,6 +144,7 @@ fetch('content/')
                     .sort((a, b) => b.lastModified - a.lastModified);
 
                 const videoModal = createVideoModal();
+                const imageModal = createImageModal();
 
                 sortedMediaInfo.forEach(mediaInfo => {
                     const container = document.createElement('div');
@@ -94,6 +162,13 @@ fetch('content/')
                         playIcon.className = 'play-icon';
                         playIcon.innerHTML = '▶';
                         container.appendChild(playIcon);
+                    } else if (isImageFile(mediaInfo.filename)) {
+                        container.classList.add('image-item');
+                        // Add a subtle focus indicator for images
+                        const focusIcon = document.createElement('div');
+                        focusIcon.className = 'focus-icon';
+                        focusIcon.innerHTML = '🔍';
+                        container.appendChild(focusIcon);
                     }
                     
                     container.appendChild(img);
@@ -108,8 +183,15 @@ fetch('content/')
                             source.src = 'content/' + fixed_url;
                             video.load();
                             videoModal.style.display = 'flex';
+                        } else if (isImageFile(mediaInfo.filename)) {
+                            // Open image in modal
+                            const modalImg = imageModal.querySelector('img');
+                            const filenameSpan = imageModal.querySelector('.image-filename');
+                            modalImg.src = 'content/' + fixed_url;
+                            filenameSpan.textContent = mediaInfo.filename;
+                            imageModal.style.display = 'flex';
                         } else {
-                            // Copy image URL to clipboard
+                            // For other file types, copy URL to clipboard
                             navigator.clipboard.writeText(window.location.origin + '/images/content/' + fixed_url);
                         }
                     });
