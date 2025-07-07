@@ -33,7 +33,10 @@ function createImageModal() {
             <img src="" alt="Full size image">
             <div class="image-info">
                 <span class="image-filename"></span>
-                <button class="copy-url-btn">Copy URL</button>
+                <div class="modal-buttons">
+                    <button class="copy-url-btn">Copy URL</button>
+                    <button class="delete-file-btn">Delete File</button>
+                </div>
             </div>
         </div>
     `;
@@ -55,10 +58,14 @@ function createImageModal() {
     // Copy URL functionality
     const copyBtn = modal.querySelector('.copy-url-btn');
     copyBtn.addEventListener('click', () => {
-        const img = modal.querySelector('img');
-        // Get the original URL by removing 'thumbnails/' from the path
-        const originalUrl = img.src.replace('/content/thumbnails/', '/content/');
-        navigator.clipboard.writeText(originalUrl).then(() => {
+        const filenameSpan = modal.querySelector('.image-filename');
+        const filename = filenameSpan.textContent;
+        
+        // Create the full URL for the original file (same as how images are loaded)
+        const encodedFilename = filename.split(' ').join('%20');
+        const fullUrl = window.location.origin + window.location.pathname.replace(/\/$/, '') + '/content/' + encodedFilename;
+        
+        navigator.clipboard.writeText(fullUrl).then(() => {
             copyBtn.textContent = 'Copied!';
             setTimeout(() => {
                 copyBtn.textContent = 'Copy URL';
@@ -67,7 +74,7 @@ function createImageModal() {
             console.error('Failed to copy URL:', err);
             // Fallback for older browsers
             const textArea = document.createElement('textarea');
-            textArea.value = originalUrl;
+            textArea.value = fullUrl;
             document.body.appendChild(textArea);
             textArea.select();
             document.execCommand('copy');
@@ -76,6 +83,36 @@ function createImageModal() {
             setTimeout(() => {
                 copyBtn.textContent = 'Copy URL';
             }, 2000);
+        });
+    });
+
+    // Delete file functionality
+    const deleteBtn = modal.querySelector('.delete-file-btn');
+    deleteBtn.addEventListener('click', () => {
+        const filenameSpan = modal.querySelector('.image-filename');
+        const filename = filenameSpan.textContent;
+        
+        // Create the delete command (using relative path that should work in most setups)
+        const deleteCommand = `rm -rf "./content/${filename}"`;
+        
+        navigator.clipboard.writeText(deleteCommand).then(() => {
+            deleteBtn.textContent = 'Command Copied!';
+            setTimeout(() => {
+                deleteBtn.textContent = 'Delete File';
+            }, 3000);
+        }).catch(err => {
+            console.error('Failed to copy delete command:', err);
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = deleteCommand;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            deleteBtn.textContent = 'Command Copied!';
+            setTimeout(() => {
+                deleteBtn.textContent = 'Delete File';
+            }, 3000);
         });
     });
 
@@ -206,7 +243,8 @@ fetch('content/')
                             imageModal.style.display = 'flex';
                         } else {
                             // For other file types, copy URL to clipboard
-                            navigator.clipboard.writeText(window.location.origin + '/images/content/' + fixed_url);
+                            const currentUrl = window.location.origin + window.location.pathname.replace(/\/$/, '') + '/content/' + fixed_url;
+                            navigator.clipboard.writeText(currentUrl);
                         }
                     });
 

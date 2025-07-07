@@ -186,7 +186,13 @@ body {
     max-width: 400px;
 }
 
-.copy-url-btn {
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.copy-url-btn, .delete-file-btn {
     background: #007acc;
     color: white;
     border: none;
@@ -195,14 +201,27 @@ body {
     cursor: pointer;
     font-weight: bold;
     transition: background 0.3s ease;
+    min-width: 120px;
 }
 
-.copy-url-btn:hover {
+.copy-url-btn:hover, .delete-file-btn:hover {
     background: #005a9f;
 }
 
-.copy-url-btn:active {
+.copy-url-btn:active, .delete-file-btn:active {
     background: #004080;
+}
+
+.delete-file-btn {
+    background: #dc3545;
+}
+
+.delete-file-btn:hover {
+    background: #c82333;
+}
+
+.delete-file-btn:active {
+    background: #bd2130;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -253,6 +272,17 @@ body {
         gap: 10px;
         margin-top: 10px;
         padding: 0 10px;
+    }
+    
+    .modal-buttons {
+        width: 100%;
+        justify-content: center;
+    }
+    
+    .copy-url-btn, .delete-file-btn {
+        padding: 10px 20px;
+        font-size: 14px;
+        min-width: 140px;
     }
     
     .image-filename {
