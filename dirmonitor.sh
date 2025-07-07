@@ -1,5 +1,5 @@
-input_directory="<directory of content>"
-output_directory="<directory of thumbnails>"
+input_directory="/home/container/www/content"
+output_directory="/home/container/www/content/thumbnails"
 
 # monitor the directory for new files
 inotifywait -m -e moved_to -e close_write -e create --format "%w%f" $input_directory | while read -r newfile
