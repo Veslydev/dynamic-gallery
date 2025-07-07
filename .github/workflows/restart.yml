@@ -1,0 +1,20 @@
+name: Restart Server on Push
+
+on:
+  push:
+    branches:
+      - main  # Adjust if you want to trigger on different branches
+
+jobs:
+  restart-server:
+    runs-on: ubuntu-latest
+    steps:    
+      - name: Restart Pterodactyl Server
+        run: |
+          curl -X POST \
+            "${{ secrets.SERVER_URL }}" \
+                  -H "Authorization: Bearer ${{ secrets.PTLC_KEY }}" \
+                  -H "Content-Type: application/json" \
+                  -H "Accept: Application/vnd.pterodactyl.v1+json" \
+                  -H "User-Agent: Veslys" \
+                  -d '{"signal": "restart"}'

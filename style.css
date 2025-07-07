@@ -39,15 +39,12 @@ body {
     background: rgba(0, 0, 0, 0.7);
     color: white;
     border-radius: 50%;
-    /* Dynamic sizing based on thumbnail size */
-    width: min(50px, 15%);
-    height: min(50px, 15%);
-    min-width: 30px;
-    min-height: 30px;
+    width: 60px;
+    height: 60px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: min(20px, 4vw);
+    font-size: 24px;
     pointer-events: none;
     transition: all 0.3s ease;
 }
@@ -229,11 +226,9 @@ body {
     }
     
     .video-item .play-icon {
-        width: min(40px, 20%);
-        height: min(40px, 20%);
-        min-width: 25px;
-        min-height: 25px;
-        font-size: min(16px, 5vw);
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
     }
 
     /* Mobile styles for image modal */
