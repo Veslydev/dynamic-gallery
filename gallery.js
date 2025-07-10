@@ -556,12 +556,14 @@ function createVideoModal() {
 }
 
 // Pagination configuration
-const ITEMS_PER_PAGE = 50;
+const ITEMS_PER_PAGE = 150;
 let currentPage = 0;
 let allMediaInfo = [];
 let isLoading = false;
 let hasMoreItems = true;
 let totalMediaCount = 0;
+let backgroundLoadingQueue = [];
+let isBackgroundLoading = false;
 
 // Caching system
 const mediaCache = new Map();
@@ -587,7 +589,8 @@ function createLoadingIndicator() {
 function updateLoadingProgress(loadedCount, totalCount) {
     const progressElement = document.querySelector('.loading-progress');
     if (progressElement && totalCount > 0) {
-        progressElement.textContent = `Loaded ${loadedCount} of ${totalCount} items`;
+        const percentage = Math.round((loadedCount / totalCount) * 100);
+        progressElement.textContent = `Loaded ${loadedCount} of ${totalCount} items (${percentage}%) - ${ITEMS_PER_PAGE} per batch`;
     }
 }
 
@@ -608,19 +611,22 @@ function getFromCache(key) {
 // Function to preload thumbnails
 function preloadThumbnails(mediaInfoArray) {
     mediaInfoArray.forEach(mediaInfo => {
+        const img = new Image();
         const thumbnailFilename = getThumbnailFilename(mediaInfo.filename);
-        const thumbnailUrl = 'content/thumbnails/' + thumbnailFilename;
+        img.src = 'content/' + thumbnailFilename;
         
-        if (!thumbnailCache.has(thumbnailUrl)) {
-            const img = new Image();
-            img.onload = () => thumbnailCache.add(thumbnailUrl);
-            img.onerror = () => console.warn(`Failed to preload thumbnail: ${thumbnailUrl}`);
-            img.src = thumbnailUrl;
-        }
+        // Store in preload cache
+        img.onload = () => {
+            addToCache(`preload_${thumbnailFilename}`, img.src);
+        };
+        
+        img.onerror = () => {
+            console.warn(`Failed to preload thumbnail: ${thumbnailFilename}`);
+        };
     });
 }
 
-// Function to fetch media files in batches
+// Function to fetch media files in batches with optimized directory parsing
 async function fetchMediaBatch(startIndex, batchSize) {
     const cacheKey = `batch_${startIndex}_${batchSize}`;
     
@@ -629,7 +635,7 @@ async function fetchMediaBatch(startIndex, batchSize) {
     if (cached) {
         return cached;
     }
-    
+
     try {
         // Fetch the directory listing
         const response = await fetch('content/');
@@ -639,19 +645,26 @@ async function fetchMediaBatch(startIndex, batchSize) {
         const htmlDocument = parser.parseFromString(data, 'text/html');
         const links = Array.from(htmlDocument.querySelectorAll('a'));
 
-        const mediaFilenames = links
-            .map(link => link.textContent.trim())
-            .filter(filename => !filename.includes('/') && !filename.includes('↓') &&
-                !filename.includes('File') && !filename.includes('Date'))
-            .filter(filename => isImageFile(filename) || isVideoFile(filename));
+        // Get all media filenames (only once per session if not cached)
+        let allMediaFilenames = getFromCache('all_media_filenames');
+        if (!allMediaFilenames) {
+            allMediaFilenames = links
+                .map(link => link.textContent.trim())
+                .filter(filename => !filename.includes('/') && !filename.includes('↓') &&
+                    !filename.includes('File') && !filename.includes('Date'))
+                .filter(filename => isImageFile(filename) || isVideoFile(filename));
+            
+            // Cache the complete list for future use
+            addToCache('all_media_filenames', allMediaFilenames);
+        }
 
         // Update total count on first load
         if (startIndex === 0) {
-            totalMediaCount = mediaFilenames.length;
+            totalMediaCount = allMediaFilenames.length;
         }
 
         // Get the slice we need for this batch
-        const batchFilenames = mediaFilenames.slice(startIndex, startIndex + batchSize);
+        const batchFilenames = allMediaFilenames.slice(startIndex, startIndex + batchSize);
         
         // Fetch metadata only for the files we need
         const fetchPromises = batchFilenames.map(async filename => {
@@ -757,7 +770,7 @@ function createMediaItemElement(mediaInfo, videoModal, imageModal) {
     return container;
 }
 
-// Function to load a page of media items
+// Function to load a page of media items with background loading
 async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
     if (isLoading || !hasMoreItems) return;
     
@@ -779,17 +792,13 @@ async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
         // Add the new items to our allMediaInfo array
         allMediaInfo.push(...batchMediaInfo);
         
-        // Preload thumbnails for the current batch
+        // Preload thumbnails for the current batch (high priority)
         preloadThumbnails(batchMediaInfo);
         
-        // Preload thumbnails for next batch in background
-        if (hasMoreItems) {
-            setTimeout(() => {
-                fetchMediaBatch(startIndex + ITEMS_PER_PAGE, ITEMS_PER_PAGE)
-                    .then(nextBatch => preloadThumbnails(nextBatch))
-                    .catch(err => console.warn('Failed to preload next batch:', err));
-            }, 1000);
-        }
+        // Start background loading for next batches after a short delay
+        setTimeout(() => {
+            startBackgroundLoading();
+        }, 500);
         
         // Create and append media elements
         const fragment = document.createDocumentFragment();
@@ -837,13 +846,13 @@ function checkScrollPosition() {
     const windowHeight = window.innerHeight;
     const documentHeight = document.documentElement.scrollHeight;
     
-    // Load more items when user is within 200px of the bottom
-    if (scrollTop + windowHeight >= documentHeight - 200) {
+    // Load more items when user is within 500px of the bottom (increased for 150 items)
+    if (scrollTop + windowHeight >= documentHeight - 500) {
         loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
     }
 }
 
-// Throttled scroll event handler
+// Optimized scroll event handler with better throttling
 let scrollTimeout;
 function handleScroll() {
     if (scrollTimeout) return;
@@ -851,7 +860,7 @@ function handleScroll() {
     scrollTimeout = setTimeout(() => {
         checkScrollPosition();
         scrollTimeout = null;
-    }, 100);
+    }, 50); // Reduced throttle time for better responsiveness
 }
 
 // Initialize the gallery
@@ -878,3 +887,39 @@ async function initializeGallery() {
 
 // Start the gallery
 initializeGallery();
+
+// Background loading function for better user experience
+async function startBackgroundLoading() {
+    if (isBackgroundLoading || !hasMoreItems) return;
+    
+    isBackgroundLoading = true;
+    
+    try {
+        // Load the next 2-3 batches in background
+        const nextBatches = [];
+        for (let i = 1; i <= 3; i++) {
+            const nextStartIndex = (currentPage + i) * ITEMS_PER_PAGE;
+            if (nextStartIndex < totalMediaCount) {
+                nextBatches.push(fetchMediaBatch(nextStartIndex, ITEMS_PER_PAGE));
+            }
+        }
+        
+        // Load batches in background
+        Promise.all(nextBatches).then(batches => {
+            batches.forEach(batch => {
+                if (batch.length > 0) {
+                    // Preload thumbnails for these batches
+                    preloadThumbnails(batch);
+                }
+            });
+            console.log('Background loading completed for next', batches.length, 'batches');
+        }).catch(err => {
+            console.warn('Background loading failed:', err);
+        });
+        
+    } catch (error) {
+        console.warn('Background loading error:', error);
+    } finally {
+        isBackgroundLoading = false;
+    }
+}
