@@ -1,5 +1,28 @@
 const gallery = document.getElementById('gallery');
 
+// ===============================
+// PAGINATION AND CACHING CONFIG
+// ===============================
+const ITEMS_PER_PAGE = 600;
+let currentPage = 0;
+let allMediaInfo = [];
+let isLoading = false;
+let hasMoreItems = true;
+let totalMediaCount = 0;
+let backgroundLoadingQueue = [];
+let isBackgroundLoading = false;
+
+// Caching system
+const mediaCache = new Map();
+const CACHE_SIZE = 200; // Cache up to 200 items in memory
+
+// Thumbnail preloading cache
+const thumbnailCache = new Set();
+
+// ===============================
+// UTILITY FUNCTIONS
+// ===============================
+
 // Function to check if a file is a video
 function isVideoFile(filename) {
     const videoExtensions = ['.mp4', '.mov'];
@@ -554,23 +577,6 @@ function createVideoModal() {
 
     return modal;
 }
-
-// Pagination configuration
-const ITEMS_PER_PAGE = 150;
-let currentPage = 0;
-let allMediaInfo = [];
-let isLoading = false;
-let hasMoreItems = true;
-let totalMediaCount = 0;
-let backgroundLoadingQueue = [];
-let isBackgroundLoading = false;
-
-// Caching system
-const mediaCache = new Map();
-const CACHE_SIZE = 200; // Cache up to 200 items in memory
-
-// Thumbnail preloading cache
-const thumbnailCache = new Set();
 
 // Create loading indicator
 function createLoadingIndicator() {
