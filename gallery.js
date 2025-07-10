@@ -555,6 +555,147 @@ function createVideoModal() {
     return modal;
 }
 
+// Pagination configuration
+const ITEMS_PER_PAGE = 50;
+let currentPage = 0;
+let allMediaInfo = [];
+let isLoading = false;
+let hasMoreItems = true;
+
+// Create loading indicator
+function createLoadingIndicator() {
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading-indicator';
+    loadingDiv.innerHTML = `
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading more images...</div>
+    `;
+    loadingDiv.style.display = 'none';
+    return loadingDiv;
+}
+
+// Function to create media item element
+function createMediaItemElement(mediaInfo, videoModal, imageModal) {
+    const container = document.createElement('div');
+    container.className = 'media-item';
+    
+    const img = document.createElement('img');
+    const thumbnailFilename = getThumbnailFilename(mediaInfo.filename);
+    const thumbnailUrl = 'content/thumbnails/' + thumbnailFilename;
+    img.src = img.alt = thumbnailUrl;
+    
+    // Add play icon overlay for videos
+    if (isVideoFile(mediaInfo.filename)) {
+        container.classList.add('video-item');
+        const playIcon = document.createElement('div');
+        playIcon.className = 'play-icon';
+        playIcon.innerHTML = '▶';
+        container.appendChild(playIcon);
+    } else if (isImageFile(mediaInfo.filename)) {
+        container.classList.add('image-item');
+        // Add a subtle focus indicator for images
+        const focusIcon = document.createElement('div');
+        focusIcon.className = 'focus-icon';
+        focusIcon.innerHTML = '🔍';
+        container.appendChild(focusIcon);
+    }
+    
+    container.appendChild(img);
+
+    container.addEventListener('click', () => {
+        if (isVideoFile(mediaInfo.filename)) {
+            // Find index in video array and open video modal
+            const videoIndex = allMediaInfo.filter(m => isVideoFile(m.filename))
+                .findIndex(m => m.filename === mediaInfo.filename);
+            videoModal.showMedia(allMediaInfo, videoIndex);
+        } else if (isImageFile(mediaInfo.filename)) {
+            // Find index in image array and open image modal
+            const imageIndex = allMediaInfo.filter(m => isImageFile(m.filename))
+                .findIndex(m => m.filename === mediaInfo.filename);
+            imageModal.showMedia(allMediaInfo, imageIndex);
+        } else {
+            // For other file types, copy URL to clipboard
+            const fixed_url = mediaInfo.filename.split(' ').join('%20');
+            const currentUrl = window.location.origin + window.location.pathname.replace(/\/$/, '') + '/content/' + fixed_url;
+            navigator.clipboard.writeText(currentUrl);
+        }
+    });
+
+    container.addEventListener('contextmenu', (menu) => {
+        menu.preventDefault();
+        const link = document.createElement('a');
+        link.href = 'content/' + mediaInfo.filename;
+        link.target = '_blank';
+        link.click();
+    });
+
+    return container;
+}
+
+// Function to load a page of media items
+function loadMediaPage(videoModal, imageModal, loadingIndicator) {
+    if (isLoading || !hasMoreItems) return;
+    
+    isLoading = true;
+    loadingIndicator.style.display = 'flex';
+    
+    const startIndex = currentPage * ITEMS_PER_PAGE;
+    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, allMediaInfo.length);
+    const pageItems = allMediaInfo.slice(startIndex, endIndex);
+    
+    // Simulate a small delay to show loading indicator
+    setTimeout(() => {
+        pageItems.forEach(mediaInfo => {
+            const mediaElement = createMediaItemElement(mediaInfo, videoModal, imageModal);
+            gallery.appendChild(mediaElement);
+        });
+        
+        currentPage++;
+        hasMoreItems = endIndex < allMediaInfo.length;
+        
+        isLoading = false;
+        loadingIndicator.style.display = 'none';
+        
+        // Show "no more items" message if all items are loaded
+        if (!hasMoreItems) {
+            showEndMessage();
+        }
+    }, 300);
+}
+
+// Function to show end of gallery message
+function showEndMessage() {
+    const endMessage = document.createElement('div');
+    endMessage.className = 'end-message';
+    endMessage.innerHTML = `
+        <div class="end-text">🎉 You've reached the end! Total items: ${allMediaInfo.length}</div>
+    `;
+    gallery.appendChild(endMessage);
+}
+
+// Function to check if user has scrolled near the bottom
+function checkScrollPosition() {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const windowHeight = window.innerHeight;
+    const documentHeight = document.documentElement.scrollHeight;
+    
+    // Load more items when user is within 200px of the bottom
+    if (scrollTop + windowHeight >= documentHeight - 200) {
+        loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
+    }
+}
+
+// Throttled scroll event handler
+let scrollTimeout;
+function handleScroll() {
+    if (scrollTimeout) return;
+    
+    scrollTimeout = setTimeout(() => {
+        checkScrollPosition();
+        scrollTimeout = null;
+    }, 100);
+}
+
 fetch('content/')
     .then(response => response.text())
     .then(data => {
@@ -578,68 +719,22 @@ fetch('content/')
 
         Promise.all(fetchLastModifiedPromises)
             .then(mediaInfoArray => {
-                const sortedMediaInfo = mediaInfoArray
+                allMediaInfo = mediaInfoArray
                     .filter(mediaInfo => mediaInfo.lastModified !== null)
                     .sort((a, b) => b.lastModified - a.lastModified);
 
-                const videoModal = createVideoModal();
-                const imageModal = createImageModal();
-
-                sortedMediaInfo.forEach((mediaInfo, index) => {
-                    const container = document.createElement('div');
-                    container.className = 'media-item';
-                    
-                    const img = document.createElement('img');
-                    const thumbnailFilename = getThumbnailFilename(mediaInfo.filename);
-                    const thumbnailUrl = 'content/thumbnails/' + thumbnailFilename;
-                    img.src = img.alt = thumbnailUrl;
-                    
-                    // Add play icon overlay for videos
-                    if (isVideoFile(mediaInfo.filename)) {
-                        container.classList.add('video-item');
-                        const playIcon = document.createElement('div');
-                        playIcon.className = 'play-icon';
-                        playIcon.innerHTML = '▶';
-                        container.appendChild(playIcon);
-                    } else if (isImageFile(mediaInfo.filename)) {
-                        container.classList.add('image-item');
-                        // Add a subtle focus indicator for images
-                        const focusIcon = document.createElement('div');
-                        focusIcon.className = 'focus-icon';
-                        focusIcon.innerHTML = '🔍';
-                        container.appendChild(focusIcon);
-                    }
-                    
-                    container.appendChild(img);
-
-                    container.addEventListener('click', () => {
-                        if (isVideoFile(mediaInfo.filename)) {
-                            // Find index in video array and open video modal
-                            const videoIndex = sortedMediaInfo.filter(m => isVideoFile(m.filename))
-                                .findIndex(m => m.filename === mediaInfo.filename);
-                            videoModal.showMedia(sortedMediaInfo, videoIndex);
-                        } else if (isImageFile(mediaInfo.filename)) {
-                            // Find index in image array and open image modal
-                            const imageIndex = sortedMediaInfo.filter(m => isImageFile(m.filename))
-                                .findIndex(m => m.filename === mediaInfo.filename);
-                            imageModal.showMedia(sortedMediaInfo, imageIndex);
-                        } else {
-                            // For other file types, copy URL to clipboard
-                            const fixed_url = mediaInfo.filename.split(' ').join('%20');
-                            const currentUrl = window.location.origin + window.location.pathname.replace(/\/$/, '') + '/content/' + fixed_url;
-                            navigator.clipboard.writeText(currentUrl);
-                        }
-                    });
-
-                    container.addEventListener('contextmenu', (menu) => {
-                        menu.preventDefault();
-                        const link = document.createElement('a');
-                        link.href = 'content/' + mediaInfo.filename;
-                        link.target = '_blank';
-                        link.click();
-                    });
-
-                    gallery.appendChild(container);
-                });
+                // Create modals and loading indicator
+                window.videoModal = createVideoModal();
+                window.imageModal = createImageModal();
+                window.loadingIndicator = createLoadingIndicator();
+                
+                // Add loading indicator to the page
+                document.body.appendChild(window.loadingIndicator);
+                
+                // Load first page
+                loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
+                
+                // Add scroll event listener for pagination
+                window.addEventListener('scroll', handleScroll);
             });
     });
