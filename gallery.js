@@ -14,7 +14,7 @@ let isBackgroundLoading = false;
 
 // Caching system
 const mediaCache = new Map();
-const CACHE_SIZE = 200; // Cache up to 200 items in memory
+const CACHE_SIZE = 1900; // Cache up to 200 items in memory
 
 // Thumbnail preloading cache
 const thumbnailCache = new Set();
