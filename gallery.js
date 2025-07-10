@@ -608,9 +608,12 @@ function getFromCache(key) {
     return mediaCache.get(key);
 }
 
-// Function to preload thumbnails
+// Function to preload thumbnails - limited to avoid overwhelming browser
 function preloadThumbnails(mediaInfoArray) {
-    mediaInfoArray.forEach(mediaInfo => {
+    // Only preload first 50 thumbnails to avoid overwhelming the browser
+    const itemsToPreload = mediaInfoArray.slice(0, 50);
+    
+    itemsToPreload.forEach(mediaInfo => {
         const img = new Image();
         const thumbnailFilename = getThumbnailFilename(mediaInfo.filename);
         img.src = 'content/' + thumbnailFilename;
@@ -770,7 +773,7 @@ function createMediaItemElement(mediaInfo, videoModal, imageModal) {
     return container;
 }
 
-// Function to load a page of media items with background loading
+// Function to load a page of media items - only 150 at a time
 async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
     if (isLoading || !hasMoreItems) return;
     
@@ -781,7 +784,7 @@ async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
         // Calculate how many items we need to fetch
         const startIndex = currentPage * ITEMS_PER_PAGE;
         
-        // Fetch the batch of media items
+        // Fetch ONLY the current batch of media items (150)
         const batchMediaInfo = await fetchMediaBatch(startIndex, ITEMS_PER_PAGE);
         
         // Check if we have more items
@@ -792,13 +795,15 @@ async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
         // Add the new items to our allMediaInfo array
         allMediaInfo.push(...batchMediaInfo);
         
-        // Preload thumbnails for the current batch (high priority)
+        // Only preload thumbnails for the current batch
         preloadThumbnails(batchMediaInfo);
         
-        // Start background loading for next batches after a short delay
-        setTimeout(() => {
-            startBackgroundLoading();
-        }, 500);
+        // Optional: Very light preloading of just the next batch (not immediate)
+        if (hasMoreItems && currentPage > 0) { // Only after first page
+            setTimeout(() => {
+                preloadNextBatch();
+            }, 2000); // Wait 2 seconds before preloading
+        }
         
         // Create and append media elements
         const fragment = document.createDocumentFragment();
@@ -846,13 +851,13 @@ function checkScrollPosition() {
     const windowHeight = window.innerHeight;
     const documentHeight = document.documentElement.scrollHeight;
     
-    // Load more items when user is within 500px of the bottom (increased for 150 items)
-    if (scrollTop + windowHeight >= documentHeight - 500) {
+    // Load more items when user is within 300px of the bottom (moderate threshold)
+    if (scrollTop + windowHeight >= documentHeight - 300) {
         loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
     }
 }
 
-// Optimized scroll event handler with better throttling
+// Scroll event handler with reasonable throttling
 let scrollTimeout;
 function handleScroll() {
     if (scrollTimeout) return;
@@ -860,7 +865,7 @@ function handleScroll() {
     scrollTimeout = setTimeout(() => {
         checkScrollPosition();
         scrollTimeout = null;
-    }, 50); // Reduced throttle time for better responsiveness
+    }, 150); // Balanced throttle time
 }
 
 // Initialize the gallery
@@ -888,37 +893,25 @@ async function initializeGallery() {
 // Start the gallery
 initializeGallery();
 
-// Background loading function for better user experience
-async function startBackgroundLoading() {
+// Lightweight background preloading for just the next batch
+async function preloadNextBatch() {
     if (isBackgroundLoading || !hasMoreItems) return;
     
     isBackgroundLoading = true;
     
     try {
-        // Load the next 2-3 batches in background
-        const nextBatches = [];
-        for (let i = 1; i <= 3; i++) {
-            const nextStartIndex = (currentPage + i) * ITEMS_PER_PAGE;
-            if (nextStartIndex < totalMediaCount) {
-                nextBatches.push(fetchMediaBatch(nextStartIndex, ITEMS_PER_PAGE));
+        // Only preload the NEXT single batch (150 items)
+        const nextStartIndex = currentPage * ITEMS_PER_PAGE;
+        if (nextStartIndex < totalMediaCount) {
+            const nextBatch = await fetchMediaBatch(nextStartIndex, ITEMS_PER_PAGE);
+            if (nextBatch.length > 0) {
+                // Only preload thumbnails for the immediate next batch
+                preloadThumbnails(nextBatch);
+                console.log('Preloaded next batch:', nextBatch.length, 'items');
             }
         }
-        
-        // Load batches in background
-        Promise.all(nextBatches).then(batches => {
-            batches.forEach(batch => {
-                if (batch.length > 0) {
-                    // Preload thumbnails for these batches
-                    preloadThumbnails(batch);
-                }
-            });
-            console.log('Background loading completed for next', batches.length, 'batches');
-        }).catch(err => {
-            console.warn('Background loading failed:', err);
-        });
-        
     } catch (error) {
-        console.warn('Background loading error:', error);
+        console.warn('Next batch preload failed:', error);
     } finally {
         isBackgroundLoading = false;
     }
