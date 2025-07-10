@@ -561,6 +561,14 @@ let currentPage = 0;
 let allMediaInfo = [];
 let isLoading = false;
 let hasMoreItems = true;
+let totalMediaCount = 0;
+
+// Caching system
+const mediaCache = new Map();
+const CACHE_SIZE = 200; // Cache up to 200 items in memory
+
+// Thumbnail preloading cache
+const thumbnailCache = new Set();
 
 // Create loading indicator
 function createLoadingIndicator() {
@@ -569,9 +577,126 @@ function createLoadingIndicator() {
     loadingDiv.innerHTML = `
         <div class="loading-spinner"></div>
         <div class="loading-text">Loading more images...</div>
+        <div class="loading-progress"></div>
     `;
     loadingDiv.style.display = 'none';
     return loadingDiv;
+}
+
+// Update loading indicator with progress
+function updateLoadingProgress(loadedCount, totalCount) {
+    const progressElement = document.querySelector('.loading-progress');
+    if (progressElement && totalCount > 0) {
+        progressElement.textContent = `Loaded ${loadedCount} of ${totalCount} items`;
+    }
+}
+
+// Cache management functions
+function addToCache(key, value) {
+    if (mediaCache.size >= CACHE_SIZE) {
+        // Remove oldest entries if cache is full
+        const firstKey = mediaCache.keys().next().value;
+        mediaCache.delete(firstKey);
+    }
+    mediaCache.set(key, value);
+}
+
+function getFromCache(key) {
+    return mediaCache.get(key);
+}
+
+// Function to preload thumbnails
+function preloadThumbnails(mediaInfoArray) {
+    mediaInfoArray.forEach(mediaInfo => {
+        const thumbnailFilename = getThumbnailFilename(mediaInfo.filename);
+        const thumbnailUrl = 'content/thumbnails/' + thumbnailFilename;
+        
+        if (!thumbnailCache.has(thumbnailUrl)) {
+            const img = new Image();
+            img.onload = () => thumbnailCache.add(thumbnailUrl);
+            img.onerror = () => console.warn(`Failed to preload thumbnail: ${thumbnailUrl}`);
+            img.src = thumbnailUrl;
+        }
+    });
+}
+
+// Function to fetch media files in batches
+async function fetchMediaBatch(startIndex, batchSize) {
+    const cacheKey = `batch_${startIndex}_${batchSize}`;
+    
+    // Check cache first
+    const cached = getFromCache(cacheKey);
+    if (cached) {
+        return cached;
+    }
+    
+    try {
+        // Fetch the directory listing
+        const response = await fetch('content/');
+        const data = await response.text();
+        
+        const parser = new DOMParser();
+        const htmlDocument = parser.parseFromString(data, 'text/html');
+        const links = Array.from(htmlDocument.querySelectorAll('a'));
+
+        const mediaFilenames = links
+            .map(link => link.textContent.trim())
+            .filter(filename => !filename.includes('/') && !filename.includes('↓') &&
+                !filename.includes('File') && !filename.includes('Date'))
+            .filter(filename => isImageFile(filename) || isVideoFile(filename));
+
+        // Update total count on first load
+        if (startIndex === 0) {
+            totalMediaCount = mediaFilenames.length;
+        }
+
+        // Get the slice we need for this batch
+        const batchFilenames = mediaFilenames.slice(startIndex, startIndex + batchSize);
+        
+        // Fetch metadata only for the files we need
+        const fetchPromises = batchFilenames.map(async filename => {
+            const metadataCacheKey = `metadata_${filename}`;
+            const cachedMetadata = getFromCache(metadataCacheKey);
+            
+            if (cachedMetadata) {
+                return cachedMetadata;
+            }
+            
+            try {
+                const response = await fetch('content/' + filename, { method: 'HEAD' });
+                const mediaInfo = {
+                    filename: filename,
+                    lastModified: new Date(response.headers.get('last-modified'))
+                };
+                
+                // Cache the metadata
+                addToCache(metadataCacheKey, mediaInfo);
+                return mediaInfo;
+            } catch (error) {
+                console.warn(`Failed to fetch metadata for ${filename}:`, error);
+                return {
+                    filename: filename,
+                    lastModified: new Date() // Use current date as fallback
+                };
+            }
+        });
+
+        const batchMediaInfo = await Promise.all(fetchPromises);
+        
+        // Sort this batch by last modified (newest first)
+        const sortedBatch = batchMediaInfo
+            .filter(mediaInfo => mediaInfo.lastModified !== null)
+            .sort((a, b) => b.lastModified - a.lastModified);
+        
+        // Cache the result
+        addToCache(cacheKey, sortedBatch);
+        
+        return sortedBatch;
+        
+    } catch (error) {
+        console.error('Error fetching media batch:', error);
+        return [];
+    }
 }
 
 // Function to create media item element
@@ -633,34 +758,67 @@ function createMediaItemElement(mediaInfo, videoModal, imageModal) {
 }
 
 // Function to load a page of media items
-function loadMediaPage(videoModal, imageModal, loadingIndicator) {
+async function loadMediaPage(videoModal, imageModal, loadingIndicator) {
     if (isLoading || !hasMoreItems) return;
     
     isLoading = true;
     loadingIndicator.style.display = 'flex';
     
-    const startIndex = currentPage * ITEMS_PER_PAGE;
-    const endIndex = Math.min(startIndex + ITEMS_PER_PAGE, allMediaInfo.length);
-    const pageItems = allMediaInfo.slice(startIndex, endIndex);
-    
-    // Simulate a small delay to show loading indicator
-    setTimeout(() => {
-        pageItems.forEach(mediaInfo => {
+    try {
+        // Calculate how many items we need to fetch
+        const startIndex = currentPage * ITEMS_PER_PAGE;
+        
+        // Fetch the batch of media items
+        const batchMediaInfo = await fetchMediaBatch(startIndex, ITEMS_PER_PAGE);
+        
+        // Check if we have more items
+        if (batchMediaInfo.length < ITEMS_PER_PAGE || startIndex + ITEMS_PER_PAGE >= totalMediaCount) {
+            hasMoreItems = false;
+        }
+        
+        // Add the new items to our allMediaInfo array
+        allMediaInfo.push(...batchMediaInfo);
+        
+        // Preload thumbnails for the current batch
+        preloadThumbnails(batchMediaInfo);
+        
+        // Preload thumbnails for next batch in background
+        if (hasMoreItems) {
+            setTimeout(() => {
+                fetchMediaBatch(startIndex + ITEMS_PER_PAGE, ITEMS_PER_PAGE)
+                    .then(nextBatch => preloadThumbnails(nextBatch))
+                    .catch(err => console.warn('Failed to preload next batch:', err));
+            }, 1000);
+        }
+        
+        // Create and append media elements
+        const fragment = document.createDocumentFragment();
+        
+        batchMediaInfo.forEach(mediaInfo => {
             const mediaElement = createMediaItemElement(mediaInfo, videoModal, imageModal);
-            gallery.appendChild(mediaElement);
+            fragment.appendChild(mediaElement);
         });
         
+        gallery.appendChild(fragment);
+        
+        // Update page counter
         currentPage++;
-        hasMoreItems = endIndex < allMediaInfo.length;
         
-        isLoading = false;
-        loadingIndicator.style.display = 'none';
+        // Update progress indicator
+        updateLoadingProgress(allMediaInfo.length, totalMediaCount);
         
-        // Show "no more items" message if all items are loaded
-        if (!hasMoreItems) {
+        // Show end message if no more items
+        if (!hasMoreItems && !document.querySelector('.end-message')) {
             showEndMessage();
         }
-    }, 300);
+        
+    } catch (error) {
+        console.error('Error loading media page:', error);
+        hasMoreItems = false;
+    } finally {
+        isLoading = false;
+        loadingIndicator.style.display = 'none';
+    }
 }
 
 // Function to show end of gallery message
@@ -668,7 +826,7 @@ function showEndMessage() {
     const endMessage = document.createElement('div');
     endMessage.className = 'end-message';
     endMessage.innerHTML = `
-        <div class="end-text">🎉 You've reached the end! Total items: ${allMediaInfo.length}</div>
+        <div class="end-text">🎉 You've reached the end! Total items: ${totalMediaCount}</div>
     `;
     gallery.appendChild(endMessage);
 }
@@ -696,45 +854,27 @@ function handleScroll() {
     }, 100);
 }
 
-fetch('content/')
-    .then(response => response.text())
-    .then(data => {
-        const parser = new DOMParser();
-        const htmlDocument = parser.parseFromString(data, 'text/html');
-        const links = Array.from(htmlDocument.querySelectorAll('a'));
+// Initialize the gallery
+async function initializeGallery() {
+    try {
+        // Create modals and loading indicator
+        window.videoModal = createVideoModal();
+        window.imageModal = createImageModal();
+        window.loadingIndicator = createLoadingIndicator();
+        
+        // Add loading indicator to the page
+        document.body.appendChild(window.loadingIndicator);
+        
+        // Load first page
+        await loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
+        
+        // Add scroll event listener for pagination
+        window.addEventListener('scroll', handleScroll);
+        
+    } catch (error) {
+        console.error('Error initializing gallery:', error);
+    }
+}
 
-        const mediaFilenames = links
-            .map(link => link.textContent.trim())
-            // hide directories and the nginx fancyindex page.
-            .filter(filename => !filename.includes('/') && !filename.includes('↓') &&
-                !filename.includes('File') && !filename.includes('Date'));
-
-        const fetchLastModifiedPromises = mediaFilenames.map(async filename => {
-            const response = await fetch('content/' + filename, { method: 'HEAD' });
-            return ({
-                filename: filename,
-                lastModified: new Date(response.headers.get('last-modified'))
-            });
-        });
-
-        Promise.all(fetchLastModifiedPromises)
-            .then(mediaInfoArray => {
-                allMediaInfo = mediaInfoArray
-                    .filter(mediaInfo => mediaInfo.lastModified !== null)
-                    .sort((a, b) => b.lastModified - a.lastModified);
-
-                // Create modals and loading indicator
-                window.videoModal = createVideoModal();
-                window.imageModal = createImageModal();
-                window.loadingIndicator = createLoadingIndicator();
-                
-                // Add loading indicator to the page
-                document.body.appendChild(window.loadingIndicator);
-                
-                // Load first page
-                loadMediaPage(window.videoModal, window.imageModal, window.loadingIndicator);
-                
-                // Add scroll event listener for pagination
-                window.addEventListener('scroll', handleScroll);
-            });
-    });
+// Start the gallery
+initializeGallery();

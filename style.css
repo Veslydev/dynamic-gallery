@@ -362,6 +362,13 @@ body {
     font-weight: 500;
 }
 
+.loading-progress {
+    font-size: 12px;
+    color: #888;
+    margin-top: 5px;
+    font-family: monospace;
+}
+
 /* End Message Styles */
 .end-message {
     grid-column: 1 / -1;
